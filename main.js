@@ -20,13 +20,14 @@ const allTabBtn = $(".all-tab");
 const tabs = $(".tabs");
 
 const TAB_KEYS = {
+    allTab: "all-tab",
     activeTab: "active-tab",
     completedTab: "completed-tab"
 };
 
 document.addEventListener("DOMContentLoaded", function () {
     // Lấy activeTab từ localStorage
-    const activeTab = localStorage.getItem("activeTab") || "all-tab";
+    const activeTab = localStorage.getItem("activeTab") || TAB_KEYS.allTab;
 
     // Bỏ class active khỏi các tab
     $$(".tab-button").forEach(tab => tab.classList.remove("active"));
@@ -63,12 +64,18 @@ function removeVietnameseTones(str) {
         .replace(/[\u0300-\u036f]/g, "")
         .replace(/đ/g, "d")
         .replace(/Đ/g, "D")
-        .toLowerCase();
+        .toLowerCase()
+        .trim();
 }
 
 // Khi người dùng gõ vào ô tìm kiếm
 searchInput.oninput = function (event) {
     const keyword = removeVietnameseTones(event.target.value);
+
+    // Chuyển về tab 'Tất cả' khi tìm kiếm
+    $$(".tab-button").forEach((tab) => tab.classList.remove("active"));
+    $(`.tab-button[data-tab="${TAB_KEYS.allTab}"]`).classList.add("active");
+
 
     const filteredTasks = todoTasks.filter(task => {
         const title = removeVietnameseTones(task.title);
@@ -76,6 +83,11 @@ searchInput.oninput = function (event) {
 
         return title.includes(keyword) || description.includes(keyword);
     });
+
+    if (!filteredTasks.length) {
+        setHTML("#todoList", "<p>Không tìm thấy</p>");
+        return;
+    }
 
     renderTasks(filteredTasks);
 };
@@ -155,12 +167,31 @@ modalDeleteClose.onclick = closeFormDelete;
 // Lấy danh sách task từ bộ nhớ trình duyệt (nếu có)
 const todoTasks = JSON.parse(localStorage.getItem("todoTasks")) ?? [];
 
+// Hàm check trùng tiêu đề
+function checkTitleDuplicate(title, taskIndex) {
+    const normalizedTitle = removeVietnameseTones(title);
+
+    return todoTasks.some((task, index) => {
+        if (taskIndex !== null && index === taskIndex) return false;
+        return removeVietnameseTones(task.title) === normalizedTitle;
+    });
+}
+
 // Khi gửi form (thêm mới hoặc sửa task)
 todoForm.onsubmit = (event) => {
     event.preventDefault();
     // Lấy dữ liệu từ form
     const formData = Object.fromEntries(new FormData(todoForm));
+    const isDuplicateTitle = checkTitleDuplicate(formData.title, editIndex);
+    if (isDuplicateTitle) {
+        showToast({
+            text: "Task title is duplicated!",
+            backgroundColor: "#dc3545",
+        });
+        return;
+    }
 
+    // Check trùng tiêu đề khi tạo và khi xóa
     // Nếu đang sửa task
     if (editIndex) {
         todoTasks[editIndex] = formData;
@@ -184,7 +215,6 @@ todoForm.onsubmit = (event) => {
             text: "Create task successfully!",
             backgroundColor: "#62ac89",
         });
-
     }
 
     // Lưu danh sách task vào bộ nhớ
@@ -194,7 +224,7 @@ todoForm.onsubmit = (event) => {
     closeForm();
 
     // Hiển thị lại danh sách task
-    const activeTab = localStorage.getItem("activeTab") || "all-tab";
+    const activeTab = localStorage.getItem("activeTab") || TAB_KEYS.allTab;
     const tasks = getTasksByTab(activeTab);
 
     renderTasks(tasks);
@@ -206,7 +236,7 @@ function saveTasks() {
 }
 
 // Hàm lưu trạng thái tab đang chọn
-function saveTabActive(tab = "all-tab") {
+function saveTabActive(tab = TAB_KEYS.allTab) {
     localStorage.setItem("activeTab", tab);
 }
 
@@ -260,7 +290,6 @@ todoList.onclick = function (event) {
         openFormDeleteModal(task, taskIndex);
     }
 
-
     // Nếu nhấn nút hoàn thành/chưa hoàn thành
     if (completeBtn) {
         const taskIndex = completeBtn.dataset.index;
@@ -292,13 +321,16 @@ deleteTaskSubmit.onclick = function () {
     closeFormDelete();
 };
 
+function setHTML(selector, html) {
+    const element = document.querySelector(selector);
+    element.innerHTML = html;
+}
+
 // Hàm hiển thị danh sách task ra màn hình
 function renderTasks(tasks = todoTasks) {
     // Nếu chưa có task nào
     if (!tasks.length) {
-        todoList.innerHTML = `
-            <p>Chưa có công việc nào.</p>
-        `;
+        setHTML("#todoList", "<p>Chưa có công việc nào.</p>");
         return;
     }
 
